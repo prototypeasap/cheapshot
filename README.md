@@ -17,6 +17,12 @@ For providers without a batch API (DeepSeek, local models, any OpenAI-compatible
 ## Install
 
 ```bash
+brew install prototypeasap/tap/cheapshot
+```
+
+Or with Go:
+
+```bash
 go install github.com/prototypeasap/cheapshot/cmd/cheapshot@latest
 ```
 
