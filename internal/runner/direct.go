@@ -28,13 +28,16 @@ type DirectRunner struct {
 	loggedURL   sync.Once
 }
 
-func NewDirectRunner(apiKey, baseURL, format string, concurrency int) *DirectRunner {
+func NewDirectRunner(apiKey, baseURL, format string, concurrency int, timeout time.Duration) *DirectRunner {
+	if timeout == 0 {
+		timeout = 5 * time.Minute
+	}
 	return &DirectRunner{
 		apiKey:      apiKey,
 		baseURL:     strings.TrimRight(baseURL, "/"),
 		format:      format,
 		concurrency: concurrency,
-		client:      &http.Client{Timeout: 5 * time.Minute},
+		client:      &http.Client{Timeout: timeout},
 		retry:       provider.DefaultRetryConfig(),
 	}
 }
@@ -60,16 +63,37 @@ func (r *DirectRunner) Run(ctx context.Context, inputPath, outputPath string, _ 
 		return nil, fmt.Errorf("empty input")
 	}
 
-	fmt.Fprintf(os.Stderr, "Processing %d requests (concurrency=%d, format=%s)...\n", len(items), r.concurrency, r.format)
+	fmt.Fprintf(os.Stderr, "Processing %d requests (concurrency=%d, format=%s, timeout=%s)...\n",
+		len(items), r.concurrency, r.format, r.client.Timeout)
 
 	results := make([]resultItem, len(items))
 	var succeeded, failed atomic.Int64
+	var lastComplete atomic.Int64
+	lastComplete.Store(time.Now().UnixMilli())
 
 	work := make(chan int, len(items))
 	for i := range items {
 		work <- i
 	}
 	close(work)
+
+	ticker := time.NewTicker(2 * time.Second)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				s, f := succeeded.Load(), failed.Load()
+				total := s + f
+				elapsed := time.Since(time.UnixMilli(lastComplete.Load())).Truncate(time.Second)
+				if total < int64(len(items)) {
+					fmt.Fprintf(os.Stderr, "\rProcessing... %d/%d completed (%d failed) [%s since last]", total, len(items), f, elapsed)
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
 
 	var wg sync.WaitGroup
 	for range min(r.concurrency, len(items)) {
@@ -88,13 +112,16 @@ func (r *DirectRunner) Run(ctx context.Context, inputPath, outputPath string, _ 
 				} else {
 					succeeded.Add(1)
 				}
-				done := succeeded.Load() + failed.Load()
-				fmt.Fprintf(os.Stderr, "\rProcessing... %d/%d completed (%d failed)", done, len(items), failed.Load())
+				lastComplete.Store(time.Now().UnixMilli())
+				total := succeeded.Load() + failed.Load()
+				fmt.Fprintf(os.Stderr, "\rProcessing... %d/%d completed (%d failed)                    ", total, len(items), failed.Load())
 			}
 		}()
 	}
 
 	wg.Wait()
+	ticker.Stop()
+	close(done)
 	fmt.Fprintln(os.Stderr)
 
 	if err := r.writeOutput(outputPath, results); err != nil {

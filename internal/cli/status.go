@@ -41,7 +41,7 @@ func NewStatusCmd() *cobra.Command {
 				return fmt.Errorf("batch %s not found in local database", batchID)
 			}
 
-			prov, err := config.ResolveProvider(providerFlag)
+			prov, err := config.ResolveProvider(providerFlag, 0)
 			if err != nil {
 				return err
 			}

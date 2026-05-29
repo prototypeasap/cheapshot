@@ -58,7 +58,7 @@ func NewRecoverCmd() *cobra.Command {
 					continue
 				}
 
-				prov, err := config.ResolveProvider(batch.Provider)
+				prov, err := config.ResolveProvider(batch.Provider, 0)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "  Batch #%d (%s): cannot resolve provider: %v\n", batch.ID, batch.RemoteBatchID.String, err)
 					results = append(results, map[string]any{

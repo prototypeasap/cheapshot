@@ -34,7 +34,7 @@ that want to submit work and check back later.`,
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()
 
-			prov, err := config.ResolveProvider(providerFlag)
+			prov, err := config.ResolveProvider(providerFlag, 0)
 			if err != nil {
 				return err
 			}

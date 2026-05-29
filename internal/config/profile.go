@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,7 @@ type Profile struct {
 	APIKeyEnv   string         `yaml:"api_key_env"`
 	Format      string         `yaml:"format"`
 	ExtraBody   map[string]any `yaml:"extra_body"`
+	Timeout     string         `yaml:"timeout"`
 }
 
 type ResolvedConfig struct {
@@ -33,6 +35,7 @@ type ResolvedConfig struct {
 	BaseURL     string
 	APIKey      string
 	Concurrency int
+	Timeout     time.Duration
 }
 
 func LoadConfig() (*FileConfig, error) {
@@ -100,6 +103,9 @@ func ResolveRunConfig(providerFlag, modeFlag string, concurrency int) (*Resolved
 	if rc.Concurrency == 0 {
 		rc.Concurrency = 10
 	}
+	if rc.Timeout == 0 {
+		rc.Timeout = 5 * time.Minute
+	}
 
 	return rc, nil
 }
@@ -130,6 +136,11 @@ func applyProfile(rc *ResolvedConfig, cfg *FileConfig, name string) {
 	rc.Concurrency = profile.Concurrency
 	if profile.APIKeyEnv != "" {
 		rc.APIKey = os.Getenv(profile.APIKeyEnv)
+	}
+	if profile.Timeout != "" {
+		if d, err := time.ParseDuration(profile.Timeout); err == nil {
+			rc.Timeout = d
+		}
 	}
 }
 

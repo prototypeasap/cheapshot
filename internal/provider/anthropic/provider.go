@@ -24,15 +24,18 @@ type Provider struct {
 	retry      provider.RetryConfig
 }
 
-func New(apiKey, baseURL string) *Provider {
+func New(apiKey, baseURL string, timeout time.Duration) *Provider {
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
+	}
+	if timeout == 0 {
+		timeout = 5 * time.Minute
 	}
 	return &Provider{
 		apiKey:     apiKey,
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiVersion: "2023-06-01",
-		client:     &http.Client{Timeout: 5 * time.Minute},
+		client:     &http.Client{Timeout: timeout},
 		retry:      provider.DefaultRetryConfig(),
 	}
 }

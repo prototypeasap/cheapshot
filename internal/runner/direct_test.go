@@ -40,7 +40,7 @@ func TestDirectRunner_NoAuthHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	runner := NewDirectRunner("", srv.URL, "openai", 1)
+	runner := NewDirectRunner("", srv.URL, "openai", 1, 0)
 
 	input := filepath.Join(t.TempDir(), "input.jsonl")
 	output := filepath.Join(t.TempDir(), "output.jsonl")
@@ -79,7 +79,7 @@ func TestDirectRunner_SlashModelName(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	runner := NewDirectRunner("", srv.URL, "openai", 1)
+	runner := NewDirectRunner("", srv.URL, "openai", 1, 0)
 
 	input := filepath.Join(t.TempDir(), "input.jsonl")
 	output := filepath.Join(t.TempDir(), "output.jsonl")
@@ -112,7 +112,7 @@ func TestDirectRunner_LatencyMs(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	runner := NewDirectRunner("sk-test", srv.URL, "openai", 1)
+	runner := NewDirectRunner("sk-test", srv.URL, "openai", 1, 0)
 
 	input := filepath.Join(t.TempDir(), "input.jsonl")
 	output := filepath.Join(t.TempDir(), "output.jsonl")

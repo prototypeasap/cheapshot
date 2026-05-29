@@ -24,6 +24,7 @@ func NewRunCmd() *cobra.Command {
 		pollInterval time.Duration
 		modeFlag     string
 		concurrency  int
+		timeout      time.Duration
 	)
 
 	cmd := &cobra.Command{
@@ -60,15 +61,19 @@ model, re-run prepare.`,
 
 			var r runner.Runner
 
+			if timeout > 0 {
+				cfg.Timeout = timeout
+			}
+
 			switch cfg.Mode {
 			case "direct":
-				r = runner.NewDirectRunner(cfg.APIKey, cfg.BaseURL, cfg.Format, cfg.Concurrency)
+				r = runner.NewDirectRunner(cfg.APIKey, cfg.BaseURL, cfg.Format, cfg.Concurrency, cfg.Timeout)
 			default:
 				input, err := os.ReadFile(inputPath)
 				if err != nil {
 					return fmt.Errorf("reading input: %w", err)
 				}
-				prov, err := config.ResolveProvider(providerFlag)
+				prov, err := config.ResolveProvider(providerFlag, cfg.Timeout)
 				if err != nil {
 					return err
 				}
@@ -107,6 +112,7 @@ model, re-run prepare.`,
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 15*time.Second, "Poll interval (batch mode)")
 	cmd.Flags().StringVar(&modeFlag, "mode", "", "Execution mode: batch or direct")
 	cmd.Flags().IntVarP(&concurrency, "concurrency", "c", 0, "Concurrent requests (direct mode, default 10)")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "Per-request timeout (direct mode, default 5m, e.g. 30m for large models)")
 	_ = cmd.MarkFlagRequired("input")
 	_ = cmd.MarkFlagRequired("output")
 

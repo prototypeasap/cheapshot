@@ -55,6 +55,7 @@ func (r *BatchRunner) Run(ctx context.Context, inputPath, outputPath string, opt
 }
 
 func (r *BatchRunner) pollAndDownload(ctx context.Context, batchDBID int64, remoteBatchID, outputPath string, pollInterval time.Duration) (*RunResult, error) {
+	start := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -74,7 +75,8 @@ func (r *BatchRunner) pollAndDownload(ctx context.Context, batchDBID int64, remo
 
 		_ = r.db.UpdatePollStatus(batchDBID, status.Raw)
 
-		fmt.Fprintf(os.Stderr, "Polling... %s (%d/%d completed)\n", status.Raw, status.Succeeded+status.Failed, status.Total)
+		elapsed := time.Since(start).Truncate(time.Second)
+		fmt.Fprintf(os.Stderr, "Polling... %s (%d/%d completed, %s elapsed)\n", status.Raw, status.Succeeded+status.Failed, status.Total, elapsed)
 
 		if status.Terminal {
 			_ = r.db.MarkCompleted(batchDBID, status.Succeeded, status.Failed)

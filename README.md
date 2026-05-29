@@ -131,6 +131,8 @@ cheapshot run -p deepseek --mode direct -i batch.jsonl -o results-deepseek.jsonl
 
 Direct mode works with any OpenAI-compatible API — DeepSeek, Together, vLLM, Ollama, etc.
 
+Default per-request timeout is 5 minutes. For large models with thinking (e.g. 122B + `thinking_budget`), increase it with `--timeout 30m` or set `timeout: 30m` in provider config. Progress updates on stderr show elapsed time since the last completion so you can see slow requests before they time out.
+
 ## Local servers
 
 Works out of the box with vLLM, llama.cpp, and Ollama. No API key needed — just point at the server:
@@ -143,6 +145,7 @@ providers:
     format: openai
     mode: direct
     concurrency: 16
+    timeout: 30m                         # large thinking models need more than the 5m default
 
   qwen-llamacpp:
     base_url: http://192.168.1.160:8080  # NOT http://…:8080/v1
