@@ -10,8 +10,9 @@ import (
 )
 
 type FileConfig struct {
-	Providers map[string]Profile `yaml:"providers"`
-	Default   string             `yaml:"default"`
+	Providers   map[string]Profile `yaml:"providers"`
+	Default     string             `yaml:"default"`
+	ExtractMeta bool               `yaml:"extract_meta"`
 }
 
 type Profile struct {

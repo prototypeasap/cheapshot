@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/prototypeasap/cheapshot/internal/config"
 	"github.com/prototypeasap/cheapshot/internal/jsonl"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +38,12 @@ Use --json to parse JSON responses and promote fields to top-level JSONL keys.
   becomes named fields for stage N+1 templates.
 Use --field to extract a specific JSON field from the response instead of raw text.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if !meta {
+				if cfg, err := config.LoadConfig(); err == nil {
+					meta = cfg.ExtractMeta
+				}
+			}
+
 			var input *os.File
 			if inputFile == "" || inputFile == "-" {
 				input = os.Stdin

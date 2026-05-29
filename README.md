@@ -199,6 +199,7 @@ providers:
     format: openai
 
 default: openai
+extract_meta: true  # always include model/tokens/latency in extract output
 ```
 
 Providers with a `base_url` don't need an API key.
