@@ -172,8 +172,8 @@ Qwen's `thinking_budget` is a **soft hint in the chat template**, not a hard lim
 
 Recommendations:
 - Set `max_tokens` much higher than you think you need (e.g. 16000) to give room for both thinking and response
+- Use `extract --strip-thinking` to remove the `<think>...</think>` blocks from output — get the quality benefits of reasoning without the trace in your pipeline
 - Use `enable_thinking: false` for tasks where reasoning isn't needed — it's faster and avoids the budget issue entirely
-- For structured output, disable thinking — the reasoning trace can interfere with JSON generation
 - Per-line `max_tokens` and `thinking_budget` let you tune per-fixture in eval workloads
 
 ```bash
@@ -181,6 +181,9 @@ Recommendations:
 cheapshot prepare -p qwen-vllm -m "/models/Qwen3.5-122B" \
   --extra-body 'chat_template_kwargs={"enable_thinking":true,"thinking_budget":200}' \
   --max-tokens 16000
+
+# Extract results with thinking stripped
+cheapshot extract --strip-thinking -i results.jsonl
 
 # Thinking disabled — faster, no budget issues
 cheapshot prepare -p qwen-vllm -m "/models/Qwen3.5-122B" \
@@ -297,6 +300,7 @@ Providers with a `base_url` and no `api_key_env` skip the auth header entirely �
 | `--meta` | `{"text":"Paris", "model":"gpt-4.1-nano", "input_tokens":15, "output_tokens":3, "finish_reason":"stop"}` | Adds model, tokens, finish_reason. `latency_ms` included for direct mode only (meaningless for async batch). |
 | `--json --meta --with-id` | All of the above combined | Flags compose freely |
 | `--field name` | Extracts a specific JSON field from the response text | |
+| `--strip-thinking` | Removes `<think>...</think>` blocks | For Qwen/DeepSeek reasoning models. Composes with all other flags. |
 
 Set `extract_meta: true` in config to always enable `--meta` without the flag.
 

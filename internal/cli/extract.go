@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/prototypeasap/cheapshot/internal/config"
@@ -15,11 +16,12 @@ import (
 
 func NewExtractCmd() *cobra.Command {
 	var (
-		inputFile string
-		field     string
-		withID    bool
-		jsonParse bool
-		meta      bool
+		inputFile     string
+		field         string
+		withID        bool
+		jsonParse     bool
+		meta          bool
+		stripThinking bool
 	)
 
 	cmd := &cobra.Command{
@@ -40,6 +42,7 @@ Flags compose freely:
   --meta       Add model, input_tokens, output_tokens, finish_reason.
                latency_ms is included for direct mode results only (not batch).
   --field X    Extract a single JSON field from the response text.
+  --strip-thinking  Remove <think>...</think> blocks from reasoning models.
 
 Set extract_meta: true in config to enable --meta without the flag.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -61,56 +64,13 @@ Set extract_meta: true in config to enable --meta without the flag.`,
 				input = f
 			}
 
-			scanner := jsonl.NewScanner(input)
-			writer := bufio.NewWriter(os.Stdout)
-			defer func() { _ = writer.Flush() }()
-
-			for scanner.Scan() {
-				line := scanner.Bytes()
-				if len(bytes.TrimSpace(line)) == 0 {
-					continue
-				}
-
-				customID, text, err := extractContent(line)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-					continue
-				}
-
-				if field != "" {
-					text = extractField(text, field)
-				}
-
-				var metaFields map[string]any
-				if meta {
-					metaFields = extractMeta(line)
-				}
-
-				switch {
-				case jsonParse:
-					out := parseStructured(customID, text)
-					mergeMeta(out, metaFields)
-					b, _ := json.Marshal(out)
-					_, _ = writer.Write(b)
-				case withID:
-					out := map[string]any{"id": customID, "text": text}
-					mergeMeta(out, metaFields)
-					b, _ := json.Marshal(out)
-					_, _ = writer.Write(b)
-				default:
-					if meta {
-						out := map[string]any{"text": compactLine(text)}
-						mergeMeta(out, metaFields)
-						b, _ := json.Marshal(out)
-						_, _ = writer.Write(b)
-					} else {
-						compact := compactLine(text)
-						_, _ = writer.WriteString(compact)
-					}
-				}
-				_, _ = writer.WriteString("\n")
-			}
-			return scanner.Err()
+			return runExtract(input, extractOpts{
+				field:         field,
+				withID:        withID,
+				jsonParse:     jsonParse,
+				meta:          meta,
+				stripThinking: stripThinking,
+			})
 		},
 	}
 
@@ -119,8 +79,72 @@ Set extract_meta: true in config to enable --meta without the flag.`,
 	cmd.Flags().BoolVar(&withID, "with-id", false, "Output as JSONL with custom_id preserved: {\"id\": \"...\", \"text\": \"...\"}")
 	cmd.Flags().BoolVar(&jsonParse, "json", false, "Parse JSON responses and promote fields to top-level JSONL")
 	cmd.Flags().BoolVar(&meta, "meta", false, "Include model, tokens, finish_reason, and latency_ms in output")
+	cmd.Flags().BoolVar(&stripThinking, "strip-thinking", false, "Remove <think>...</think> blocks from responses (Qwen, DeepSeek reasoning models)")
 
 	return cmd
+}
+
+type extractOpts struct {
+	field         string
+	withID        bool
+	jsonParse     bool
+	meta          bool
+	stripThinking bool
+}
+
+func runExtract(input *os.File, opts extractOpts) error {
+	scanner := jsonl.NewScanner(input)
+	writer := bufio.NewWriter(os.Stdout)
+	defer func() { _ = writer.Flush() }()
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+
+		customID, text, err := extractContent(line)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			continue
+		}
+
+		if opts.stripThinking {
+			text = stripThinkingBlocks(text)
+		}
+		if opts.field != "" {
+			text = extractField(text, opts.field)
+		}
+
+		var metaFields map[string]any
+		if opts.meta {
+			metaFields = extractMeta(line)
+		}
+
+		switch {
+		case opts.jsonParse:
+			out := parseStructured(customID, text)
+			mergeMeta(out, metaFields)
+			b, _ := json.Marshal(out)
+			_, _ = writer.Write(b)
+		case opts.withID:
+			out := map[string]any{"id": customID, "text": text}
+			mergeMeta(out, metaFields)
+			b, _ := json.Marshal(out)
+			_, _ = writer.Write(b)
+		default:
+			if opts.meta {
+				out := map[string]any{"text": compactLine(text)}
+				mergeMeta(out, metaFields)
+				b, _ := json.Marshal(out)
+				_, _ = writer.Write(b)
+			} else {
+				_, _ = writer.WriteString(compactLine(text))
+			}
+		}
+		_, _ = writer.WriteString("\n")
+	}
+	return scanner.Err()
 }
 
 func extractContent(line []byte) (customID, text string, err error) {
@@ -315,6 +339,12 @@ func mergeMeta(out, meta map[string]any) {
 	for k, v := range meta {
 		out[k] = v
 	}
+}
+
+var thinkingRe = regexp.MustCompile(`(?s)<think>.*?</think>\s*`)
+
+func stripThinkingBlocks(text string) string {
+	return strings.TrimSpace(thinkingRe.ReplaceAllString(text, ""))
 }
 
 func extractField(text, field string) string {

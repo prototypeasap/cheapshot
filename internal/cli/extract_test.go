@@ -80,6 +80,49 @@ func TestExtractMeta_Anthropic(t *testing.T) {
 	}
 }
 
+func TestStripThinking(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "simple thinking block",
+			input: "<think>\nLet me reason about this...\n</think>\n\nThe answer is 42.",
+			want:  "The answer is 42.",
+		},
+		{
+			name:  "no thinking block",
+			input: "Just a normal response.",
+			want:  "Just a normal response.",
+		},
+		{
+			name:  "thinking with JSON response",
+			input: "<think>\nI need to produce JSON.\n</think>\n\n{\"answer\": 42}",
+			want:  "{\"answer\": 42}",
+		},
+		{
+			name:  "empty thinking block",
+			input: "<think></think>\n\nResult here.",
+			want:  "Result here.",
+		},
+		{
+			name:  "unclosed thinking block",
+			input: "<think>\nModel ran out of tokens mid-thought",
+			want:  "<think>\nModel ran out of tokens mid-thought",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripThinkingBlocks(tt.input)
+			if got != tt.want {
+				t.Errorf("stripThinkingBlocks(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestExtractMeta_NoLatency(t *testing.T) {
 	line := []byte(`{
 		"custom_id": "batch-1",
