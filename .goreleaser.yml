@@ -34,15 +34,15 @@ changelog:
       - "^ci:"
       - "^chore:"
 
-# Uncomment after setting HOMEBREW_TAP_TOKEN secret with repo push access:
-# brews:
-#   - repository:
-#       owner: prototypeasap
-#       name: homebrew-tap
-#     homepage: https://github.com/prototypeasap/cheapshot
-#     description: LLM batch processing at 50% off. One binary, all providers.
-#     license: MIT
-#     install: |
-#       bin.install "cheapshot"
-#     test: |
-#       system bin/"cheapshot", "--version"
+brews:
+  - repository:
+      owner: prototypeasap
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/prototypeasap/cheapshot
+    description: CLI for LLM batch APIs. Chain multi-step workflows with Unix pipes.
+    license: MIT
+    install: |
+      bin.install "cheapshot"
+    test: |
+      system bin/"cheapshot", "--version"
