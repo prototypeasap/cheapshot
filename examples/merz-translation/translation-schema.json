@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "original": { "type": "string", "description": "The original German headline" },
+    "en": { "type": "string", "description": "English translation" },
+    "fr": { "type": "string", "description": "French translation" },
+    "es": { "type": "string", "description": "Spanish translation" },
+    "pt": { "type": "string", "description": "Portuguese translation" },
+    "zh": { "type": "string", "description": "Mandarin Chinese translation" },
+    "hi": { "type": "string", "description": "Hindi translation" }
+  },
+  "required": ["original", "en", "fr", "es", "pt", "zh", "hi"],
+  "additionalProperties": false
+}

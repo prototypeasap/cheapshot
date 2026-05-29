@@ -1,0 +1,20 @@
+{
+  "title": "chess_rating",
+  "type": "object",
+  "properties": {
+    "correctness": {
+      "type": "integer",
+      "description": "Score 0-10: Is the FEN legal? Is the solution forced?"
+    },
+    "creativity": {
+      "type": "integer",
+      "description": "Score 0-10: Is this interesting and instructive?"
+    },
+    "verdict": {
+      "type": "string",
+      "description": "One sentence assessment"
+    }
+  },
+  "required": ["correctness", "creativity", "verdict"],
+  "additionalProperties": false
+}

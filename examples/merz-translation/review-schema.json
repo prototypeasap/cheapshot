@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "original": { "type": "string", "description": "The original German headline" },
+    "en": { "type": "string", "description": "English — corrected if needed" },
+    "fr": { "type": "string", "description": "French — corrected if needed" },
+    "es": { "type": "string", "description": "Spanish — corrected if needed" },
+    "pt": { "type": "string", "description": "Portuguese — corrected if needed" },
+    "zh": { "type": "string", "description": "Mandarin — corrected if needed" },
+    "hi": { "type": "string", "description": "Hindi — corrected if needed" },
+    "errors_found": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lang": { "type": "string", "description": "Language code where error was found" },
+          "issue": { "type": "string", "description": "What was wrong" },
+          "fix": { "type": "string", "description": "How it was fixed" }
+        },
+        "required": ["lang", "issue", "fix"],
+        "additionalProperties": false
+      },
+      "description": "List of errors found and corrected"
+    }
+  },
+  "required": ["original", "en", "fr", "es", "pt", "zh", "hi", "errors_found"],
+  "additionalProperties": false
+}

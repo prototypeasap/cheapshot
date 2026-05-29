@@ -1,0 +1,10 @@
+/cheapshot
+*.db
+*.db-wal
+*.db-shm
+dist/
+*.tmp
+.env
+.env.*
+*.key
+*.pem

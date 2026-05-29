@@ -1,0 +1,28 @@
+{
+  "title": "chess_puzzle",
+  "type": "object",
+  "properties": {
+    "fen": {
+      "type": "string",
+      "description": "FEN notation of the starting position"
+    },
+    "difficulty": {
+      "type": "integer",
+      "description": "Difficulty rating from 1 to 5"
+    },
+    "theme": {
+      "type": "string",
+      "description": "Tactical theme (e.g. fork, pin, skewer, back-rank mate)"
+    },
+    "hint": {
+      "type": "string",
+      "description": "One sentence hint for the solver"
+    },
+    "solution": {
+      "type": "string",
+      "description": "Full solution in standard algebraic notation"
+    }
+  },
+  "required": ["fen", "difficulty", "theme", "hint", "solution"],
+  "additionalProperties": false
+}

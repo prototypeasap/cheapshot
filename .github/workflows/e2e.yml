@@ -1,0 +1,29 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build -ldflags "-s -w" -o cheapshot ./cmd/cheapshot
+
+      - name: Run E2E tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CHEAPSHOT_BIN: ./cheapshot
+        run: go test -v -count=1 ./e2e/...

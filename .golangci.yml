@@ -1,0 +1,88 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - cyclop
+    - dupl
+    - gocognit
+    - gocritic
+    - gocyclo
+    - gosec
+    - misspell
+    - nilerr
+    - predeclared
+    - revive
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+  settings:
+    cyclop:
+      max-complexity: 20
+    dupl:
+      threshold: 100
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (net/http.Response.Body).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+    gocognit:
+      min-complexity: 35
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 20
+    gosec:
+      excludes:
+        - G304
+      severity: medium
+      confidence: medium
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - gosec
+        path: e2e/
+        text: "G204|G702"
+      - linters:
+          - gosec
+        path: internal/provider/retry\.go
+        text: G404
+      - linters:
+          - cyclop
+          - dupl
+          - gocognit
+          - gocyclo
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
