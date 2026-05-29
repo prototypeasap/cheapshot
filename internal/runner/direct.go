@@ -149,6 +149,7 @@ func (r *DirectRunner) readInput(path string) ([]workItem, error) {
 func (r *DirectRunner) executeOne(ctx context.Context, item workItem) ([]byte, bool) {
 	endpoint := r.chatEndpoint()
 
+	start := time.Now()
 	resp, err := provider.DoWithRetry(ctx, r.retry, func() (*http.Response, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(item.body))
 		if err != nil {
@@ -157,6 +158,8 @@ func (r *DirectRunner) executeOne(ctx context.Context, item workItem) ([]byte, b
 		r.setHeaders(req)
 		return r.client.Do(req)
 	})
+	latencyMs := time.Since(start).Milliseconds()
+
 	if err != nil {
 		return r.wrapError(item.customID, fmt.Sprintf("request failed: %v", err)), true
 	}
@@ -171,7 +174,7 @@ func (r *DirectRunner) executeOne(ctx context.Context, item workItem) ([]byte, b
 		return r.wrapError(item.customID, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, truncate(respBody, 512))), true
 	}
 
-	return r.wrapSuccess(item.customID, resp.StatusCode, respBody), false
+	return r.wrapSuccess(item.customID, resp.StatusCode, respBody, latencyMs), false
 }
 
 func (r *DirectRunner) chatEndpoint() string {
@@ -183,6 +186,9 @@ func (r *DirectRunner) chatEndpoint() string {
 
 func (r *DirectRunner) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
+	if r.apiKey == "" {
+		return
+	}
 	if r.format == "anthropic" {
 		req.Header.Set("x-api-key", r.apiKey)
 		req.Header.Set("anthropic-version", "2023-06-01")
@@ -191,11 +197,12 @@ func (r *DirectRunner) setHeaders(req *http.Request) {
 	}
 }
 
-func (r *DirectRunner) wrapSuccess(customID string, statusCode int, body json.RawMessage) []byte {
+func (r *DirectRunner) wrapSuccess(customID string, statusCode int, body json.RawMessage, latencyMs int64) []byte {
 	var out []byte
 	if r.format == "anthropic" {
 		out, _ = json.Marshal(map[string]any{
-			"custom_id": customID,
+			"custom_id":  customID,
+			"latency_ms": latencyMs,
 			"result": map[string]any{
 				"type":    "succeeded",
 				"message": body,
@@ -203,8 +210,9 @@ func (r *DirectRunner) wrapSuccess(customID string, statusCode int, body json.Ra
 		})
 	} else {
 		out, _ = json.Marshal(map[string]any{
-			"id":        customID,
-			"custom_id": customID,
+			"id":         customID,
+			"custom_id":  customID,
+			"latency_ms": latencyMs,
 			"response": map[string]any{
 				"status_code": statusCode,
 				"body":        body,
