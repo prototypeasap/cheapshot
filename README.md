@@ -166,6 +166,27 @@ providers:
 
 Model names with slashes, colons, and `.gguf` extensions all work. Vendor-specific fields (like `chat_template_kwargs` for Qwen) can be passed via `extra_body` in the provider config or `--extra-body` on the CLI.
 
+### Qwen thinking models
+
+Qwen's `thinking_budget` is a **soft hint in the chat template**, not a hard limit enforced by vLLM. The model can (and will) use more tokens for reasoning than the budget suggests. Meanwhile, `max_tokens` is a **hard limit** that covers thinking + response tokens combined. If the model burns most of `max_tokens` on thinking, the actual response gets truncated (`finish_reason=length`).
+
+Recommendations:
+- Set `max_tokens` much higher than you think you need (e.g. 16000) to give room for both thinking and response
+- Use `enable_thinking: false` for tasks where reasoning isn't needed — it's faster and avoids the budget issue entirely
+- For structured output, disable thinking — the reasoning trace can interfere with JSON generation
+- Per-line `max_tokens` and `thinking_budget` let you tune per-fixture in eval workloads
+
+```bash
+# Thinking enabled, generous token budget
+cheapshot prepare -p qwen-vllm -m "/models/Qwen3.5-122B" \
+  --extra-body 'chat_template_kwargs={"enable_thinking":true,"thinking_budget":200}' \
+  --max-tokens 16000
+
+# Thinking disabled — faster, no budget issues
+cheapshot prepare -p qwen-vllm -m "/models/Qwen3.5-122B" \
+  --extra-body 'chat_template_kwargs={"enable_thinking":false}'
+```
+
 ## Extra body fields
 
 Pass vendor-specific fields into the request body at three levels. **Per-line wins over CLI, CLI wins over config. Nested objects are deep-merged.**
