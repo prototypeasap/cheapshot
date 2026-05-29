@@ -63,64 +63,12 @@ func Run(input io.Reader, output io.Writer, opts Options) error { //nolint:gocri
 		}
 		lineNum++
 
-		var content string
-		var customID string
-		var perLine map[string]any
-
-		switch {
-		case opts.FileInput:
-			path := line
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("line %d: reading file %s: %w", lineNum, path, err)
-			}
-			content = applyTemplate(opts.Template, map[string]string{
-				"Name":    filepath.Base(path),
-				"Path":    path,
-				"Content": string(data),
-			})
-			customID = sanitizeID(path)
-		case isJSON(line):
-			var obj map[string]any
-			if err := json.Unmarshal([]byte(line), &obj); err != nil {
-				return fmt.Errorf("line %d: invalid JSON: %w", lineNum, err)
-			}
-			fields := make(map[string]string)
-			for k, v := range obj {
-				if !reservedKeys[k] {
-					fields[k] = fmt.Sprintf("%v", v)
-				}
-			}
-			perLine = extractPerLine(obj)
-			content = applyTemplate(opts.Template, fields)
-			if id, ok := obj["id"]; ok {
-				customID = sanitizeID(fmt.Sprintf("%v", id))
-			} else {
-				customID = fmt.Sprintf("line-%d", lineNum)
-			}
-		default:
-			if opts.Template != "" {
-				content = applyTemplate(opts.Template, map[string]string{
-					"text":    line,
-					"Content": line,
-				})
-			} else {
-				content = line
-			}
-			customID = fmt.Sprintf("line-%d", lineNum)
+		content, customID, perLine, err := parseLine(line, lineNum, &opts)
+		if err != nil {
+			return err
 		}
 
-		var jsonLine []byte
-		var err error
-
-		switch opts.Provider {
-		case "openai":
-			jsonLine, err = formatOpenAI(customID, content, &opts, parsedSchema, perLine)
-		case "anthropic":
-			jsonLine, err = formatAnthropic(customID, content, &opts, parsedSchema, perLine)
-		default:
-			return fmt.Errorf("unknown provider: %s", opts.Provider)
-		}
+		jsonLine, err := formatLine(customID, content, &opts, parsedSchema, perLine)
 		if err != nil {
 			return fmt.Errorf("line %d: %w", lineNum, err)
 		}
@@ -243,6 +191,61 @@ func formatAnthropic(customID, content string, opts *Options, si *schemaInfo, pe
 		"params":    params,
 	}
 	return json.Marshal(req)
+}
+
+func parseLine(line string, lineNum int, opts *Options) (content, customID string, perLine map[string]any, err error) {
+	switch {
+	case opts.FileInput:
+		path := line
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", "", nil, fmt.Errorf("line %d: reading file %s: %w", lineNum, path, err)
+		}
+		content = applyTemplate(opts.Template, map[string]string{
+			"Name":    filepath.Base(path),
+			"Path":    path,
+			"Content": string(data),
+		})
+		return content, sanitizeID(path), nil, nil
+	case isJSON(line):
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			return "", "", nil, fmt.Errorf("line %d: invalid JSON: %w", lineNum, err)
+		}
+		fields := make(map[string]string)
+		for k, v := range obj {
+			if !reservedKeys[k] {
+				fields[k] = fmt.Sprintf("%v", v)
+			}
+		}
+		content = applyTemplate(opts.Template, fields)
+		customID = fmt.Sprintf("line-%d", lineNum)
+		if id, ok := obj["id"]; ok {
+			customID = sanitizeID(fmt.Sprintf("%v", id))
+		}
+		return content, customID, extractPerLine(obj), nil
+	default:
+		if opts.Template != "" {
+			content = applyTemplate(opts.Template, map[string]string{
+				"text":    line,
+				"Content": line,
+			})
+		} else {
+			content = line
+		}
+		return content, fmt.Sprintf("line-%d", lineNum), nil, nil
+	}
+}
+
+func formatLine(customID, content string, opts *Options, si *schemaInfo, perLine map[string]any) ([]byte, error) {
+	switch opts.Provider {
+	case "openai":
+		return formatOpenAI(customID, content, opts, si, perLine)
+	case "anthropic":
+		return formatAnthropic(customID, content, opts, si, perLine)
+	default:
+		return nil, fmt.Errorf("unknown provider: %s", opts.Provider)
+	}
 }
 
 func extractPerLine(obj map[string]any) map[string]any {

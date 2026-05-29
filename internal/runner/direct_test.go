@@ -10,21 +10,33 @@ import (
 	"testing"
 )
 
+func writeChatResponse(w http.ResponseWriter, model string) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id":    "chatcmpl-1",
+		"model": model,
+		"choices": []map[string]any{{
+			"index":         0,
+			"message":       map[string]string{"role": "assistant", "content": "hello"},
+			"finish_reason": "stop",
+		}},
+		"usage": map[string]int{"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+	})
+}
+
+func writeInputFile(t *testing.T, path string, row map[string]any) {
+	t.Helper()
+	data, _ := json.Marshal(row)
+	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+		t.Fatalf("writing input: %v", err)
+	}
+}
+
 func TestDirectRunner_NoAuthHeader(t *testing.T) {
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"id":    "chatcmpl-1",
-			"model": "/models/Qwen3.5-122B",
-			"choices": []map[string]any{{
-				"index":         0,
-				"message":       map[string]string{"role": "assistant", "content": "hello"},
-				"finish_reason": "stop",
-			}},
-			"usage": map[string]int{"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
-		})
+		writeChatResponse(w, "/models/Qwen3.5-122B")
 	}))
 	defer srv.Close()
 
@@ -33,18 +45,15 @@ func TestDirectRunner_NoAuthHeader(t *testing.T) {
 	input := filepath.Join(t.TempDir(), "input.jsonl")
 	output := filepath.Join(t.TempDir(), "output.jsonl")
 
-	body := map[string]any{
-		"model":    "/models/Qwen3.5-122B",
-		"messages": []map[string]string{{"role": "user", "content": "hi"}},
-	}
-	row := map[string]any{
+	writeInputFile(t, input, map[string]any{
 		"custom_id": "test-1",
 		"method":    "POST",
 		"url":       "/v1/chat/completions",
-		"body":      body,
-	}
-	data, _ := json.Marshal(row)
-	os.WriteFile(input, append(data, '\n'), 0o644)
+		"body": map[string]any{
+			"model":    "/models/Qwen3.5-122B",
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		},
+	})
 
 	result, err := runner.Run(t.Context(), input, output, RunOpts{})
 	if err != nil {
@@ -63,19 +72,10 @@ func TestDirectRunner_SlashModelName(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var req map[string]any
-		json.Unmarshal(body, &req)
-		gotModel, _ = req["model"].(string)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"id":    "chatcmpl-1",
-			"model": gotModel,
-			"choices": []map[string]any{{
-				"index":         0,
-				"message":       map[string]string{"role": "assistant", "content": "ok"},
-				"finish_reason": "stop",
-			}},
-			"usage": map[string]int{"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
-		})
+		if err := json.Unmarshal(body, &req); err == nil {
+			gotModel, _ = req["model"].(string)
+		}
+		writeChatResponse(w, gotModel)
 	}))
 	defer srv.Close()
 
@@ -84,18 +84,15 @@ func TestDirectRunner_SlashModelName(t *testing.T) {
 	input := filepath.Join(t.TempDir(), "input.jsonl")
 	output := filepath.Join(t.TempDir(), "output.jsonl")
 
-	body := map[string]any{
-		"model":    "/models/Qwen3.5-122B-A10B-NVFP4",
-		"messages": []map[string]string{{"role": "user", "content": "test"}},
-	}
-	row := map[string]any{
+	writeInputFile(t, input, map[string]any{
 		"custom_id": "slash-model",
 		"method":    "POST",
 		"url":       "/v1/chat/completions",
-		"body":      body,
-	}
-	data, _ := json.Marshal(row)
-	os.WriteFile(input, append(data, '\n'), 0o644)
+		"body": map[string]any{
+			"model":    "/models/Qwen3.5-122B-A10B-NVFP4",
+			"messages": []map[string]string{{"role": "user", "content": "test"}},
+		},
+	})
 
 	result, err := runner.Run(t.Context(), input, output, RunOpts{})
 	if err != nil {
@@ -111,17 +108,7 @@ func TestDirectRunner_SlashModelName(t *testing.T) {
 
 func TestDirectRunner_LatencyMs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"id":    "chatcmpl-1",
-			"model": "test-model",
-			"choices": []map[string]any{{
-				"index":         0,
-				"message":       map[string]string{"role": "assistant", "content": "hi"},
-				"finish_reason": "stop",
-			}},
-			"usage": map[string]int{"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
-		})
+		writeChatResponse(w, "test-model")
 	}))
 	defer srv.Close()
 
@@ -130,22 +117,28 @@ func TestDirectRunner_LatencyMs(t *testing.T) {
 	input := filepath.Join(t.TempDir(), "input.jsonl")
 	output := filepath.Join(t.TempDir(), "output.jsonl")
 
-	body := map[string]any{
-		"model":    "test-model",
-		"messages": []map[string]string{{"role": "user", "content": "hi"}},
-	}
-	row := map[string]any{"custom_id": "lat-1", "method": "POST", "url": "/v1/chat/completions", "body": body}
-	data, _ := json.Marshal(row)
-	os.WriteFile(input, append(data, '\n'), 0o644)
+	writeInputFile(t, input, map[string]any{
+		"custom_id": "lat-1",
+		"method":    "POST",
+		"url":       "/v1/chat/completions",
+		"body": map[string]any{
+			"model":    "test-model",
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		},
+	})
 
-	_, err := runner.Run(t.Context(), input, output, RunOpts{})
-	if err != nil {
+	if _, err := runner.Run(t.Context(), input, output, RunOpts{}); err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
 
-	outData, _ := os.ReadFile(output)
+	outData, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatalf("reading output: %v", err)
+	}
 	var result map[string]any
-	json.Unmarshal(outData, &result)
+	if err := json.Unmarshal(outData, &result); err != nil {
+		t.Fatalf("parsing output: %v", err)
+	}
 
 	latency, ok := result["latency_ms"]
 	if !ok {

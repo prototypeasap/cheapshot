@@ -228,6 +228,15 @@ func TestJSONSchema_Anthropic(t *testing.T) {
 	}
 }
 
+func parseOpenAIBody(t *testing.T, out []byte) map[string]any {
+	t.Helper()
+	var req map[string]any
+	if err := json.Unmarshal(out, &req); err != nil {
+		t.Fatalf("parsing output: %v", err)
+	}
+	return req["body"].(map[string]any)
+}
+
 func TestExtraBody_CLI(t *testing.T) {
 	var out bytes.Buffer
 	err := Run(strings.NewReader("hello"), &out, Options{
@@ -239,10 +248,7 @@ func TestExtraBody_CLI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var req map[string]any
-	json.Unmarshal(out.Bytes(), &req)
-	body := req["body"].(map[string]any)
-
+	body := parseOpenAIBody(t, out.Bytes())
 	if body["repetition_penalty"] != 1.05 {
 		t.Errorf("expected repetition_penalty=1.05, got %v", body["repetition_penalty"])
 	}
@@ -264,10 +270,7 @@ func TestExtraBody_PerLineOverridesCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var req map[string]any
-	json.Unmarshal(out.Bytes(), &req)
-	body := req["body"].(map[string]any)
-
+	body := parseOpenAIBody(t, out.Bytes())
 	if body["repetition_penalty"] != 1.2 {
 		t.Errorf("per-line extra_body should override CLI: expected 1.2, got %v", body["repetition_penalty"])
 	}
@@ -288,11 +291,8 @@ func TestExtraBody_DeepMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var req map[string]any
-	json.Unmarshal(out.Bytes(), &req)
-	body := req["body"].(map[string]any)
+	body := parseOpenAIBody(t, out.Bytes())
 	ctk := body["chat_template_kwargs"].(map[string]any)
-
 	if ctk["enable_thinking"] != true {
 		t.Errorf("deep merge should preserve CLI enable_thinking=true, got %v", ctk["enable_thinking"])
 	}
@@ -313,10 +313,7 @@ func TestTemperature_CLI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var req map[string]any
-	json.Unmarshal(out.Bytes(), &req)
-	body := req["body"].(map[string]any)
-
+	body := parseOpenAIBody(t, out.Bytes())
 	if body["temperature"] != 0.7 {
 		t.Errorf("expected temperature=0.7, got %v", body["temperature"])
 	}
@@ -334,9 +331,7 @@ func TestReservedKeys_StrippedFromTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var req map[string]any
-	json.Unmarshal(out.Bytes(), &req)
-	body := req["body"].(map[string]any)
+	body := parseOpenAIBody(t, out.Bytes())
 	msgs := body["messages"].([]any)
 	content := msgs[0].(map[string]any)["content"].(string)
 
