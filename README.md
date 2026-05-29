@@ -20,16 +20,11 @@ For providers without a batch API (DeepSeek, local models, any OpenAI-compatible
 
 ## Install
 
-Download a prebuilt binary from [releases](https://github.com/prototypeasap/cheapshot/releases):
-
 ```bash
-# macOS (Apple Silicon)
-curl -sL https://github.com/prototypeasap/cheapshot/releases/latest/download/cheapshot_darwin_arm64.tar.gz | tar -xz cheapshot
-# macOS (Intel)
-curl -sL https://github.com/prototypeasap/cheapshot/releases/latest/download/cheapshot_darwin_amd64.tar.gz | tar -xz cheapshot
-# Linux (amd64)
-curl -sL https://github.com/prototypeasap/cheapshot/releases/latest/download/cheapshot_linux_amd64.tar.gz | tar -xz cheapshot
+curl -fsSL https://raw.githubusercontent.com/prototypeasap/cheapshot/main/install.sh | sh
 ```
+
+Detects OS and architecture automatically. Works on macOS and Linux (amd64/arm64). Set `CHEAPSHOT_INSTALL_DIR` to change the install path (default: `/usr/local/bin`).
 
 Or via Homebrew:
 
@@ -42,6 +37,8 @@ Or with Go:
 ```bash
 go install github.com/prototypeasap/cheapshot/cmd/cheapshot@latest
 ```
+
+Or grab a binary directly from [releases](https://github.com/prototypeasap/cheapshot/releases).
 
 ## Quick start
 
