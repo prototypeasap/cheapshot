@@ -18,6 +18,7 @@ func NewExtractCmd() *cobra.Command {
 		field     string
 		withID    bool
 		jsonParse bool
+		meta      bool
 	)
 
 	cmd := &cobra.Command{
@@ -68,18 +69,32 @@ Use --field to extract a specific JSON field from the response instead of raw te
 					text = extractField(text, field)
 				}
 
+				var metaFields map[string]any
+				if meta {
+					metaFields = extractMeta(line)
+				}
+
 				switch {
 				case jsonParse:
 					out := parseStructured(customID, text)
+					mergeMeta(out, metaFields)
 					b, _ := json.Marshal(out)
 					_, _ = writer.Write(b)
 				case withID:
-					out := map[string]string{"id": customID, "text": text}
+					out := map[string]any{"id": customID, "text": text}
+					mergeMeta(out, metaFields)
 					b, _ := json.Marshal(out)
 					_, _ = writer.Write(b)
 				default:
-					compact := compactLine(text)
-					_, _ = writer.WriteString(compact)
+					if meta {
+						out := map[string]any{"text": compactLine(text)}
+						mergeMeta(out, metaFields)
+						b, _ := json.Marshal(out)
+						_, _ = writer.Write(b)
+					} else {
+						compact := compactLine(text)
+						_, _ = writer.WriteString(compact)
+					}
 				}
 				_, _ = writer.WriteString("\n")
 			}
@@ -91,6 +106,7 @@ Use --field to extract a specific JSON field from the response instead of raw te
 	cmd.Flags().StringVar(&field, "field", "", "Extract a specific JSON field from the response text")
 	cmd.Flags().BoolVar(&withID, "with-id", false, "Output as JSONL with custom_id preserved: {\"id\": \"...\", \"text\": \"...\"}")
 	cmd.Flags().BoolVar(&jsonParse, "json", false, "Parse JSON responses and promote fields to top-level JSONL")
+	cmd.Flags().BoolVar(&meta, "meta", false, "Include model, tokens, finish_reason, and latency_ms in output")
 
 	return cmd
 }
@@ -196,6 +212,96 @@ func parseStructured(customID, text string) map[string]any {
 		}
 	}
 	return out
+}
+
+func extractMeta(line []byte) map[string]any {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return nil
+	}
+
+	meta := make(map[string]any)
+
+	if v, ok := raw["latency_ms"]; ok {
+		var ms json.Number
+		if json.Unmarshal(v, &ms) == nil {
+			meta["latency_ms"] = ms
+		}
+	}
+
+	if resp, ok := raw["response"]; ok {
+		extractOpenAIMeta(resp, meta)
+	}
+	if result, ok := raw["result"]; ok {
+		extractAnthropicMeta(result, meta)
+	}
+
+	return meta
+}
+
+func extractOpenAIMeta(resp json.RawMessage, meta map[string]any) {
+	var r struct {
+		Body struct {
+			Model   string `json:"model"`
+			Choices []struct {
+				FinishReason string `json:"finish_reason"`
+			} `json:"choices"`
+			Usage struct {
+				PromptTokens     int `json:"prompt_tokens"`
+				CompletionTokens int `json:"completion_tokens"`
+			} `json:"usage"`
+		} `json:"body"`
+	}
+	if json.Unmarshal(resp, &r) != nil {
+		return
+	}
+	if r.Body.Model != "" {
+		meta["model"] = r.Body.Model
+	}
+	meta["input_tokens"] = r.Body.Usage.PromptTokens
+	meta["output_tokens"] = r.Body.Usage.CompletionTokens
+	if len(r.Body.Choices) > 0 {
+		meta["finish_reason"] = r.Body.Choices[0].FinishReason
+	}
+}
+
+func extractAnthropicMeta(result json.RawMessage, meta map[string]any) {
+	var r struct {
+		Type    string `json:"type"`
+		Message struct {
+			Model      string `json:"model"`
+			StopReason string `json:"stop_reason"`
+			Usage      struct {
+				InputTokens              int `json:"input_tokens"`
+				OutputTokens             int `json:"output_tokens"`
+				CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+				CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			} `json:"usage"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(result, &r) != nil || r.Type != "succeeded" {
+		return
+	}
+	if r.Message.Model != "" {
+		meta["model"] = r.Message.Model
+	}
+	meta["input_tokens"] = r.Message.Usage.InputTokens
+	meta["output_tokens"] = r.Message.Usage.OutputTokens
+	if r.Message.Usage.CacheReadInputTokens > 0 {
+		meta["cache_read_tokens"] = r.Message.Usage.CacheReadInputTokens
+	}
+	if r.Message.Usage.CacheCreationInputTokens > 0 {
+		meta["cache_write_tokens"] = r.Message.Usage.CacheCreationInputTokens
+	}
+	if r.Message.StopReason != "" {
+		meta["finish_reason"] = r.Message.StopReason
+	}
+}
+
+func mergeMeta(out, meta map[string]any) {
+	for k, v := range meta {
+		out[k] = v
+	}
 }
 
 func extractField(text, field string) string {
