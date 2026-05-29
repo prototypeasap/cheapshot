@@ -111,6 +111,63 @@ cheapshot run -p deepseek --mode direct -i batch.jsonl -o results-deepseek.jsonl
 
 Direct mode works with any OpenAI-compatible API — DeepSeek, Together, vLLM, Ollama, etc.
 
+## Local servers
+
+Works out of the box with vLLM, llama.cpp, and Ollama. No API key needed — just point at the server:
+
+```yaml
+providers:
+  qwen-vllm:
+    base_url: http://192.168.1.97:8000/v1
+    model: "/models/Qwen3.5-122B-A10B-NVFP4"
+    format: openai
+    mode: direct
+    concurrency: 16
+
+  qwen-llamacpp:
+    base_url: http://192.168.1.160:8080/v1
+    model: "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"
+    format: openai
+    mode: direct
+    concurrency: 1
+
+  llama-ollama:
+    base_url: http://localhost:11434/v1
+    model: "llama3:8b-instruct"
+    format: openai
+    mode: direct
+    concurrency: 4
+```
+
+Model names with slashes, colons, and `.gguf` extensions all work. Vendor-specific fields (like `chat_template_kwargs` for Qwen) can be passed via `extra_body` in the provider config or `--extra-body` on the CLI.
+
+## Extra body fields
+
+Pass vendor-specific fields into the request body at three levels:
+
+```yaml
+# 1. Provider config default
+providers:
+  qwen-vllm:
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false
+```
+
+```bash
+# 2. CLI flag (overrides config)
+cheapshot prepare -p qwen-vllm -m qwen3 \
+  --extra-body 'chat_template_kwargs={"enable_thinking":true}' \
+  --extra-body 'repetition_penalty=1.05'
+```
+
+```jsonl
+# 3. Per-line in JSONL input (overrides CLI, deep-merges nested objects)
+{"text":"...", "extra_body": {"chat_template_kwargs": {"thinking_budget": 200}}}
+```
+
+Precedence: provider config → `--extra-body` → per-line `extra_body`. Nested objects are deep-merged.
+
 ## Configuration
 
 Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` to get started. For multiple providers, use a config file:
@@ -164,7 +221,7 @@ Providers with a `base_url` don't need an API key.
 |---------|-------------|
 | `prepare` | Turn text or JSONL into provider-native batch format |
 | `run` | Submit + poll + download (batch) or concurrent execution (direct) |
-| `extract` | Pull response text; `--json` promotes structured fields to JSONL keys |
+| `extract` | Pull response text; `--json` promotes structured fields; `--meta` adds tokens/latency |
 | `submit` | Submit a pre-built batch file |
 | `status` | Check batch status (`--watch` for polling) |
 | `results` | Download completed batch results |
