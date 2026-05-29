@@ -28,15 +28,20 @@ func NewExtractCmd() *cobra.Command {
 		Long: `Pull the response text out of provider-native result JSONL.
 Auto-detects OpenAI vs Anthropic format. One line of output per result.
 
-This is the key plumbing command for daisy-chaining batches:
+Piping between stages:
   cheapshot run ... -o stage1.jsonl
   cheapshot extract -i stage1.jsonl | cheapshot prepare ... | cheapshot run ...
 
-Use --with-id to preserve custom_id as JSONL: {"id": "...", "text": "..."}
-Use --json to parse JSON responses and promote fields to top-level JSONL keys.
-  This is the key to pipeline contracts: structured output from stage N
-  becomes named fields for stage N+1 templates.
-Use --field to extract a specific JSON field from the response instead of raw text.`,
+Flags compose freely:
+  (default)    Plain text, one line per result.
+  --with-id    JSONL with custom_id: {"id": "...", "text": "..."}
+  --json       Parse JSON responses and promote fields to top-level JSONL keys.
+               The raw response is kept in the "text" key alongside promoted fields.
+  --meta       Add model, input_tokens, output_tokens, finish_reason.
+               latency_ms is included for direct mode results only (not batch).
+  --field X    Extract a single JSON field from the response text.
+
+Set extract_meta: true in config to enable --meta without the flag.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if !meta {
 				if cfg, err := config.LoadConfig(); err == nil {
@@ -218,6 +223,7 @@ func parseStructured(customID, text string) map[string]any {
 			out[k] = v
 		}
 	}
+	out["text"] = text
 	return out
 }
 

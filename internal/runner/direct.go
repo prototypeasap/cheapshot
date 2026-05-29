@@ -25,6 +25,7 @@ type DirectRunner struct {
 	concurrency int
 	client      *http.Client
 	retry       provider.RetryConfig
+	loggedURL   sync.Once
 }
 
 func NewDirectRunner(apiKey, baseURL, format string, concurrency int) *DirectRunner {
@@ -148,6 +149,7 @@ func (r *DirectRunner) readInput(path string) ([]workItem, error) {
 
 func (r *DirectRunner) executeOne(ctx context.Context, item workItem) ([]byte, bool) {
 	endpoint := r.chatEndpoint()
+	r.loggedURL.Do(func() { fmt.Fprintf(os.Stderr, "→ POST %s\n", endpoint) })
 
 	start := time.Now()
 	resp, err := provider.DoWithRetry(ctx, r.retry, func() (*http.Response, error) {

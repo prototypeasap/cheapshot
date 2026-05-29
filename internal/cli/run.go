@@ -36,7 +36,11 @@ Modes:
   direct:           Send requests concurrently via chat API. No discount, instant results.
 
 The mode is set via --mode, provider config profile, or defaults to batch.
-Use direct mode for small jobs or providers without batch APIs (e.g. DeepSeek).`,
+Use direct mode for small jobs or providers without batch APIs (e.g. DeepSeek).
+
+The request body from prepare is forwarded verbatim — -p only resolves
+transport (base_url, api_key, format, mode, concurrency). To change the
+model, re-run prepare.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()

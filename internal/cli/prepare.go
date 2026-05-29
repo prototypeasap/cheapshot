@@ -34,6 +34,10 @@ func NewPrepareCmd() *cobra.Command {
 		Long: `Turn plain text, file paths, or structured JSONL into provider-native
 batch request format. Output goes to stdout for piping into 'cheapshot run'.
 
+-p accepts a config profile name (e.g. "qwen-vllm") or a wire format
+("openai", "anthropic"). When given a profile name, format, model, and
+extra_body are read from the profile. This is the same -p flag as on run.
+
 Modes:
   Line mode (default):  Each line of input becomes one request.
   File mode (--file-input): Each line is a file path; file content is injected.
@@ -45,7 +49,8 @@ Templates use {{.FieldName}} syntax. Available fields:
   JSONL mode: Any field from the JSON object
 
 Extra body fields are merged into the request body with --extra-body KEY=JSON.
-Per-line overrides via "extra_body" in JSONL input take highest precedence.`,
+Per-line overrides via "extra_body" in JSONL input take highest precedence.
+Merge order: config extra_body < CLI --extra-body < per-line extra_body.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			pc, err := config.ResolvePrepareConfig(providerFlag, model)
 			if err != nil {
@@ -119,7 +124,7 @@ Per-line overrides via "extra_body" in JSONL input take highest precedence.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Provider: openai or anthropic")
+	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Provider profile name or format (openai, anthropic)")
 	cmd.Flags().StringVarP(&model, "model", "m", "", "Model name (required)")
 	cmd.Flags().IntVar(&maxTokens, "max-tokens", 0, "Max tokens (Anthropic requires this; defaults to 1024)")
 	cmd.Flags().StringVarP(&system, "system", "s", "", "System prompt")

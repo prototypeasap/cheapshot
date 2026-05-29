@@ -53,8 +53,6 @@ func LoadConfig() (*FileConfig, error) {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
 
-	warnWorldReadable(path)
-
 	var cfg FileConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
@@ -62,6 +60,12 @@ func LoadConfig() (*FileConfig, error) {
 	if err := rejectRawKeys(&cfg); err != nil {
 		return nil, err
 	}
+	if err := validateBaseURLs(&cfg); err != nil {
+		return nil, err
+	}
+
+	warnWorldReadable(path, &cfg)
+
 	return &cfg, nil
 }
 
@@ -231,7 +235,17 @@ func envOrDefault(key, def string) string {
 	return def
 }
 
-func warnWorldReadable(path string) {
+func warnWorldReadable(path string, cfg *FileConfig) {
+	hasKey := false
+	for _, p := range cfg.Providers {
+		if p.APIKeyEnv != "" {
+			hasKey = true
+			break
+		}
+	}
+	if !hasKey {
+		return
+	}
 	info, err := os.Stat(filepath.Clean(path))
 	if err != nil {
 		return
@@ -256,4 +270,17 @@ func rejectRawKeys(cfg *FileConfig) error {
 
 func looksLikeKey(s string) bool {
 	return strings.HasPrefix(s, "sk-") || strings.HasPrefix(s, "sk-ant-")
+}
+
+func validateBaseURLs(cfg *FileConfig) error {
+	for name, profile := range cfg.Providers {
+		u := strings.TrimRight(profile.BaseURL, "/")
+		if strings.HasSuffix(u, "/v1") || strings.Contains(u, "/v1/chat") {
+			return fmt.Errorf(
+				"provider %q: base_url %q ends with /v1 — cheapshot appends /v1/chat/completions automatically; use the server host only (e.g. http://localhost:8000)",
+				name, profile.BaseURL,
+			)
+		}
+	}
+	return nil
 }
