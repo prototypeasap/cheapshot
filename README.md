@@ -38,7 +38,15 @@ Or with Go:
 go install github.com/prototypeasap/cheapshot/cmd/cheapshot@latest
 ```
 
-Or grab a binary directly from [releases](https://github.com/prototypeasap/cheapshot/releases).
+**Windows (PowerShell):** Download the `.zip` from [releases](https://github.com/prototypeasap/cheapshot/releases) and add to your PATH:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/prototypeasap/cheapshot/releases/latest/download/cheapshot_windows_amd64.zip" -OutFile cheapshot.zip
+Expand-Archive cheapshot.zip -DestinationPath "$env:LOCALAPPDATA\cheapshot"
+$env:PATH += ";$env:LOCALAPPDATA\cheapshot"
+```
+
+Or grab any binary directly from [releases](https://github.com/prototypeasap/cheapshot/releases).
 
 ## Quick start
 
