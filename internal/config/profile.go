@@ -15,12 +15,13 @@ type FileConfig struct {
 }
 
 type Profile struct {
-	BaseURL     string `yaml:"base_url"`
-	Model       string `yaml:"model"`
-	Mode        string `yaml:"mode"`
-	Concurrency int    `yaml:"concurrency"`
-	APIKeyEnv   string `yaml:"api_key_env"`
-	Format      string `yaml:"format"`
+	BaseURL     string         `yaml:"base_url"`
+	Model       string         `yaml:"model"`
+	Mode        string         `yaml:"mode"`
+	Concurrency int            `yaml:"concurrency"`
+	APIKeyEnv   string         `yaml:"api_key_env"`
+	Format      string         `yaml:"format"`
+	ExtraBody   map[string]any `yaml:"extra_body"`
 }
 
 type ResolvedConfig struct {
@@ -156,10 +157,16 @@ func applyBuiltinDefaults(rc *ResolvedConfig, name string) {
 	}
 }
 
-func ResolvePrepareConfig(providerFlag, modelFlag string) (format, model string, err error) {
+type PrepareConfig struct {
+	Format    string
+	Model     string
+	ExtraBody map[string]any
+}
+
+func ResolvePrepareConfig(providerFlag, modelFlag string) (*PrepareConfig, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
 	name := providerFlag
@@ -172,31 +179,32 @@ func ResolvePrepareConfig(providerFlag, modelFlag string) (format, model string,
 	if name == "" {
 		name, err = detectProviderName()
 		if err != nil {
-			return "", "", err
+			return nil, err
 		}
 	}
 
-	format = "openai"
+	pc := &PrepareConfig{Format: "openai"}
 	if name == "anthropic" {
-		format = "anthropic"
+		pc.Format = "anthropic"
 	}
 	if profile, ok := cfg.Providers[name]; ok {
 		if profile.Format != "" {
-			format = profile.Format
+			pc.Format = profile.Format
 		}
 		if modelFlag == "" {
-			model = profile.Model
+			pc.Model = profile.Model
 		}
+		pc.ExtraBody = profile.ExtraBody
 	}
 
 	if modelFlag != "" {
-		model = modelFlag
+		pc.Model = modelFlag
 	}
-	if model == "" {
-		return "", "", fmt.Errorf("--model is required (no default in config for %q)", name)
+	if pc.Model == "" {
+		return nil, fmt.Errorf("--model is required (no default in config for %q)", name)
 	}
 
-	return format, model, nil
+	return pc, nil
 }
 
 func detectProviderName() (string, error) {

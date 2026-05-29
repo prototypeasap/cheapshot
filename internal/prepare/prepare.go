@@ -11,14 +11,34 @@ import (
 )
 
 type Options struct {
-	Provider   string
-	Model      string
-	MaxTokens  int
-	System     string
-	Template   string
-	FileInput  bool
-	JSONMode   bool
-	JSONSchema json.RawMessage
+	Provider    string
+	Model       string
+	MaxTokens   int
+	System      string
+	Template    string
+	FileInput   bool
+	JSONMode    bool
+	JSONSchema  json.RawMessage
+	ExtraBody   map[string]any
+	Temperature *float64
+}
+
+var reservedKeys = map[string]bool{
+	"extra_body": true, "temperature": true, "top_p": true, "top_k": true,
+	"seed": true, "stop": true, "max_tokens": true, "presence_penalty": true,
+	"frequency_penalty": true, "min_p": true,
+}
+
+func DeepMerge(dst, src map[string]any) {
+	for k, v := range src {
+		if srcMap, ok := v.(map[string]any); ok {
+			if dstMap, ok := dst[k].(map[string]any); ok {
+				DeepMerge(dstMap, srcMap)
+				continue
+			}
+		}
+		dst[k] = v
+	}
 }
 
 func Run(input io.Reader, output io.Writer, opts Options) error { //nolint:gocritic // opts passed by value intentionally for public API stability
@@ -45,6 +65,7 @@ func Run(input io.Reader, output io.Writer, opts Options) error { //nolint:gocri
 
 		var content string
 		var customID string
+		var perLine map[string]any
 
 		switch {
 		case opts.FileInput:
@@ -66,8 +87,11 @@ func Run(input io.Reader, output io.Writer, opts Options) error { //nolint:gocri
 			}
 			fields := make(map[string]string)
 			for k, v := range obj {
-				fields[k] = fmt.Sprintf("%v", v)
+				if !reservedKeys[k] {
+					fields[k] = fmt.Sprintf("%v", v)
+				}
 			}
+			perLine = extractPerLine(obj)
 			content = applyTemplate(opts.Template, fields)
 			if id, ok := obj["id"]; ok {
 				customID = sanitizeID(fmt.Sprintf("%v", id))
@@ -91,9 +115,9 @@ func Run(input io.Reader, output io.Writer, opts Options) error { //nolint:gocri
 
 		switch opts.Provider {
 		case "openai":
-			jsonLine, err = formatOpenAI(customID, content, &opts, parsedSchema)
+			jsonLine, err = formatOpenAI(customID, content, &opts, parsedSchema, perLine)
 		case "anthropic":
-			jsonLine, err = formatAnthropic(customID, content, &opts, parsedSchema)
+			jsonLine, err = formatAnthropic(customID, content, &opts, parsedSchema, perLine)
 		default:
 			return fmt.Errorf("unknown provider: %s", opts.Provider)
 		}
@@ -120,7 +144,7 @@ type schemaInfo struct {
 	schema map[string]any
 }
 
-func formatOpenAI(customID, content string, opts *Options, si *schemaInfo) ([]byte, error) {
+func formatOpenAI(customID, content string, opts *Options, si *schemaInfo, perLine map[string]any) ([]byte, error) {
 	messages := []map[string]string{}
 	if opts.System != "" {
 		messages = append(messages, map[string]string{"role": "system", "content": opts.System})
@@ -152,6 +176,14 @@ func formatOpenAI(customID, content string, opts *Options, si *schemaInfo) ([]by
 		body["response_format"] = map[string]any{"type": "json_object"}
 	}
 
+	if opts.Temperature != nil {
+		body["temperature"] = *opts.Temperature
+	}
+	if opts.ExtraBody != nil {
+		DeepMerge(body, opts.ExtraBody)
+	}
+	applyPerLine(body, perLine)
+
 	req := map[string]any{
 		"custom_id": customID,
 		"method":    "POST",
@@ -161,7 +193,7 @@ func formatOpenAI(customID, content string, opts *Options, si *schemaInfo) ([]by
 	return json.Marshal(req)
 }
 
-func formatAnthropic(customID, content string, opts *Options, si *schemaInfo) ([]byte, error) {
+func formatAnthropic(customID, content string, opts *Options, si *schemaInfo, perLine map[string]any) ([]byte, error) {
 	params := map[string]any{
 		"model": opts.Model,
 		"messages": []map[string]string{
@@ -198,11 +230,47 @@ func formatAnthropic(customID, content string, opts *Options, si *schemaInfo) ([
 		params["system"] = sys
 	}
 
+	if opts.Temperature != nil {
+		params["temperature"] = *opts.Temperature
+	}
+	if opts.ExtraBody != nil {
+		DeepMerge(params, opts.ExtraBody)
+	}
+	applyPerLine(params, perLine)
+
 	req := map[string]any{
 		"custom_id": customID,
 		"params":    params,
 	}
 	return json.Marshal(req)
+}
+
+func extractPerLine(obj map[string]any) map[string]any {
+	pl := make(map[string]any)
+	for k, v := range obj {
+		if reservedKeys[k] {
+			pl[k] = v
+		}
+	}
+	if len(pl) == 0 {
+		return nil
+	}
+	return pl
+}
+
+func applyPerLine(body, perLine map[string]any) {
+	if perLine == nil {
+		return
+	}
+	for k, v := range perLine {
+		if k == "extra_body" {
+			if eb, ok := v.(map[string]any); ok {
+				DeepMerge(body, eb)
+			}
+			continue
+		}
+		body[k] = v
+	}
 }
 
 func applyTemplate(tmpl string, fields map[string]string) string {

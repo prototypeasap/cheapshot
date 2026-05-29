@@ -228,6 +228,126 @@ func TestJSONSchema_Anthropic(t *testing.T) {
 	}
 }
 
+func TestExtraBody_CLI(t *testing.T) {
+	var out bytes.Buffer
+	err := Run(strings.NewReader("hello"), &out, Options{
+		Provider:  "openai",
+		Model:     "gpt-4.1-nano",
+		ExtraBody: map[string]any{"repetition_penalty": 1.05, "chat_template_kwargs": map[string]any{"enable_thinking": false}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req map[string]any
+	json.Unmarshal(out.Bytes(), &req)
+	body := req["body"].(map[string]any)
+
+	if body["repetition_penalty"] != 1.05 {
+		t.Errorf("expected repetition_penalty=1.05, got %v", body["repetition_penalty"])
+	}
+	ctk := body["chat_template_kwargs"].(map[string]any)
+	if ctk["enable_thinking"] != false {
+		t.Errorf("expected enable_thinking=false, got %v", ctk["enable_thinking"])
+	}
+}
+
+func TestExtraBody_PerLineOverridesCLI(t *testing.T) {
+	input := `{"text":"hello","extra_body":{"repetition_penalty":1.2},"temperature":0.3}`
+	var out bytes.Buffer
+	err := Run(strings.NewReader(input), &out, Options{
+		Provider:  "openai",
+		Model:     "gpt-4.1-nano",
+		ExtraBody: map[string]any{"repetition_penalty": 1.05},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req map[string]any
+	json.Unmarshal(out.Bytes(), &req)
+	body := req["body"].(map[string]any)
+
+	if body["repetition_penalty"] != 1.2 {
+		t.Errorf("per-line extra_body should override CLI: expected 1.2, got %v", body["repetition_penalty"])
+	}
+	if body["temperature"] != 0.3 {
+		t.Errorf("per-line temperature should apply: expected 0.3, got %v", body["temperature"])
+	}
+}
+
+func TestExtraBody_DeepMerge(t *testing.T) {
+	input := `{"text":"hello","extra_body":{"chat_template_kwargs":{"thinking_budget":200}}}`
+	var out bytes.Buffer
+	err := Run(strings.NewReader(input), &out, Options{
+		Provider:  "openai",
+		Model:     "gpt-4.1-nano",
+		ExtraBody: map[string]any{"chat_template_kwargs": map[string]any{"enable_thinking": true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req map[string]any
+	json.Unmarshal(out.Bytes(), &req)
+	body := req["body"].(map[string]any)
+	ctk := body["chat_template_kwargs"].(map[string]any)
+
+	if ctk["enable_thinking"] != true {
+		t.Errorf("deep merge should preserve CLI enable_thinking=true, got %v", ctk["enable_thinking"])
+	}
+	if ctk["thinking_budget"] != float64(200) {
+		t.Errorf("deep merge should add per-line thinking_budget=200, got %v", ctk["thinking_budget"])
+	}
+}
+
+func TestTemperature_CLI(t *testing.T) {
+	temp := 0.7
+	var out bytes.Buffer
+	err := Run(strings.NewReader("hello"), &out, Options{
+		Provider:    "openai",
+		Model:       "gpt-4.1-nano",
+		Temperature: &temp,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req map[string]any
+	json.Unmarshal(out.Bytes(), &req)
+	body := req["body"].(map[string]any)
+
+	if body["temperature"] != 0.7 {
+		t.Errorf("expected temperature=0.7, got %v", body["temperature"])
+	}
+}
+
+func TestReservedKeys_StrippedFromTemplate(t *testing.T) {
+	input := `{"text":"hello","temperature":0.3,"extra_body":{"foo":1}}`
+	var out bytes.Buffer
+	err := Run(strings.NewReader(input), &out, Options{
+		Provider: "openai",
+		Model:    "gpt-4.1-nano",
+		Template: "content={{.text}} temp={{.temperature}}",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req map[string]any
+	json.Unmarshal(out.Bytes(), &req)
+	body := req["body"].(map[string]any)
+	msgs := body["messages"].([]any)
+	content := msgs[0].(map[string]any)["content"].(string)
+
+	if strings.Contains(content, "temp=0.3") {
+		t.Error("reserved key 'temperature' should not be available in template")
+	}
+	if !strings.Contains(content, "content=hello") {
+		t.Error("non-reserved key 'text' should be available in template")
+	}
+}
+
 func TestJSONMode_Anthropic_AddsSystemHint(t *testing.T) {
 	var out bytes.Buffer
 	err := Run(strings.NewReader("List colors"), &out, Options{
